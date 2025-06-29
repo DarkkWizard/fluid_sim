@@ -1,7 +1,8 @@
-mod vertex;
+pub mod vertex;
 
 use crate::fluid_sim::FluidSim;
-use wgpu::{Backends, DeviceDescriptor, RequestAdapterOptions, TextureUsages, VertexBufferLayout};
+use std::time::Instant;
+use wgpu::{util::DeviceExt, Backends, DeviceDescriptor, RequestAdapterOptions, TextureUsages};
 use winit::{
     event::*,
     event_loop::EventLoop,
@@ -19,6 +20,8 @@ struct State<'a> {
     color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
     fluid_sim: crate::fluid_sim::FluidSim,
+    vertex_buffer: wgpu::Buffer,
+    last_frame_time: Instant,
 }
 
 impl<'a> State<'a> {
@@ -36,7 +39,7 @@ impl<'a> State<'a> {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
             })
@@ -74,12 +77,24 @@ impl<'a> State<'a> {
             view_formats: vec![],
         };
 
+        surface.configure(&device, &config);
+
+        let fluid_sim = FluidSim::default();
+        let particles = fluid_sim.get_particles();
+        let particle_data = bytemuck::cast_slice(&particles);
+
         let color = wgpu::Color {
-            r: 2.9,
-            g: 3.4,
-            b: 3.4,
-            a: 3.4,
+            r: 0.9,
+            g: 0.3,
+            b: 0.8,
+            a: 0.4,
         };
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: particle_data,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("the one and only shader one shall ever need"),
@@ -131,7 +146,7 @@ impl<'a> State<'a> {
             cache: None,
         });
 
-        let fluid_sim = FluidSim::default();
+        let last_frame_time = Instant::now();
 
         State {
             surface,
@@ -143,6 +158,8 @@ impl<'a> State<'a> {
             color,
             render_pipeline,
             fluid_sim,
+            vertex_buffer,
+            last_frame_time,
         }
     }
 
@@ -151,14 +168,18 @@ impl<'a> State<'a> {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.window.request_redraw();
+        let particles = self.fluid_sim.get_particles();
+        if particles.is_empty() {
+            return Ok(());
+        }
+
+        self.queue
+            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(particles));
 
         let output = self.surface.get_current_texture()?;
-
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -182,7 +203,10 @@ impl<'a> State<'a> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(2..68, 0..3);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+            let num_particles = particles.len() as u32;
+            render_pass.draw(0..num_particles, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -190,7 +214,10 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    fn update(&self) {}
+    fn update(&mut self, delta: std::time::Duration) {
+        let dt = delta.as_secs_f32();
+        self.fluid_sim.update(dt);
+    }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.height > 0 && new_size.width > 0 {
@@ -250,8 +277,11 @@ pub async fn run() {
                         if !surface_configured {
                             return;
                         }
+                        let now = Instant::now();
+                        let delta = now - state.last_frame_time;
+                        state.last_frame_time = now;
 
-                        state.update();
+                        state.update(delta);
                         match state.render() {
                             Ok(()) => {}
                             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {

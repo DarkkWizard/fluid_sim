@@ -1,5 +1,7 @@
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Debug, Clone)]
 pub struct Vertex {
-    position: [f32; 3],
+    pub position: [f32; 3],
 }
 
 impl Vertex {
