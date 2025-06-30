@@ -16,6 +16,7 @@ tracing = "0.1.41"
 wgpu = "25.0.0"
 winit = "0.29"
 cgmath = "0.18"
+rand = "0.9.1"
 
 [dependencies.image]
 version = "0.23"

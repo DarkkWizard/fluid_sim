@@ -10,7 +10,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-struct State<'a> {
+struct BigRenderBoy<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'a>,
     window: &'a Window,
@@ -22,10 +22,12 @@ struct State<'a> {
     fluid_sim: crate::fluid_sim::FluidSim,
     vertex_buffer: wgpu::Buffer,
     last_frame_time: Instant,
+    screen_size: wgpu::Buffer,
+    screen_bind_group: wgpu::BindGroup,
 }
 
-impl<'a> State<'a> {
-    pub async fn new(window: &'a Window) -> State<'a> {
+impl<'a> BigRenderBoy<'a> {
+    pub async fn new(window: &'a Window) -> BigRenderBoy<'a> {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -79,16 +81,45 @@ impl<'a> State<'a> {
 
         surface.configure(&device, &config);
 
-        let fluid_sim = FluidSim::default();
-        let particles = fluid_sim.get_particles();
+        let screen_size = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("screen size buffer"),
+            size: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let initial_screen_size = [size.width as f32, size.height as f32];
+        queue.write_buffer(&screen_size, 0, bytemuck::cast_slice(&initial_screen_size));
+
+        let screen_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let screen_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("screen bind group"),
+            layout: &screen_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: screen_size.as_entire_binding(),
+            }],
+        });
+
+        let fluid_sim = FluidSim::new_rand(size);
+        let particles = fluid_sim.get_particles_vertexes();
         let particle_data = bytemuck::cast_slice(&particles);
 
-        let color = wgpu::Color {
-            r: 0.9,
-            g: 0.3,
-            b: 0.8,
-            a: 0.4,
-        };
+        let color = wgpu::Color::BLACK;
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -104,7 +135,7 @@ impl<'a> State<'a> {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&screen_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -148,7 +179,7 @@ impl<'a> State<'a> {
 
         let last_frame_time = Instant::now();
 
-        State {
+        BigRenderBoy {
             surface,
             window,
             size,
@@ -160,6 +191,8 @@ impl<'a> State<'a> {
             fluid_sim,
             vertex_buffer,
             last_frame_time,
+            screen_size,
+            screen_bind_group,
         }
     }
 
@@ -168,13 +201,13 @@ impl<'a> State<'a> {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let particles = self.fluid_sim.get_particles();
+        let particles = self.fluid_sim.get_particles_vertexes();
         if particles.is_empty() {
             return Ok(());
         }
 
         self.queue
-            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(particles));
+            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&particles));
 
         let output = self.surface.get_current_texture()?;
         let view = output
@@ -204,6 +237,7 @@ impl<'a> State<'a> {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_bind_group(0, &self.screen_bind_group, &[]);
 
             let num_particles = particles.len() as u32;
             render_pass.draw(0..num_particles, 0..1);
@@ -226,6 +260,10 @@ impl<'a> State<'a> {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
         }
+
+        let new_screen_size = [new_size.width as f32, new_size.height as f32];
+        self.queue
+            .write_buffer(&self.screen_size, 0, bytemuck::cast_slice(&new_screen_size));
     }
 
     fn input(&self, event: &WindowEvent) -> bool {
@@ -247,8 +285,7 @@ pub async fn run() {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let mut state = State::new(&window).await;
-    let mut surface_configured = false;
+    let mut state = BigRenderBoy::new(&window).await;
 
     _ = event_loop.run(move |event, control_flow| match event {
         winit::event::Event::WindowEvent {
@@ -268,15 +305,11 @@ pub async fn run() {
                         ..
                     } => control_flow.exit(),
                     WindowEvent::Resized(physical_size) => {
-                        surface_configured = true;
                         state.resize(*physical_size);
                     }
                     WindowEvent::RedrawRequested => {
                         state.window().request_redraw();
 
-                        if !surface_configured {
-                            return;
-                        }
                         let now = Instant::now();
                         let delta = now - state.last_frame_time;
                         state.last_frame_time = now;
