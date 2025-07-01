@@ -39,17 +39,28 @@ impl FluidSim {
             })
             .collect();
 
-        let mut sectors: [Vec<usize>; 9] = Default::default();
+        let sectors: [Vec<usize>; 9] = Default::default();
 
-        let w_one_third: f32 = (width / 3) as f32;
+        let mut endgame = Self {
+            particles_positions,
+            particles_velocities,
+            sectors,
+        };
+        endgame.update_sectors(size);
+        endgame
+    }
+
+    fn update_sectors(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        let w_one_third: f32 = (size.width / 3) as f32;
         let w_two_third: f32 = w_one_third + w_one_third;
         let w_three_third: f32 = size.width as f32;
-        let h_one_third: f32 = (height / 3) as f32;
+        let h_one_third: f32 = (size.height / 3) as f32;
         let h_two_third: f32 = h_one_third + h_one_third;
         let h_three_third: f32 = size.height as f32;
 
-        // ignore how ugly this is I don't like it either
-        for (i, steve) in particles_positions.iter().enumerate() {
+        let mut sectors: [Vec<usize>; 9] = Default::default();
+
+        for (i, steve) in self.particles_positions.iter().enumerate() {
             if steve.x < w_one_third {
                 if steve.y < h_one_third {
                     sectors[0].push(i);
@@ -77,18 +88,13 @@ impl FluidSim {
             }
         }
 
-        dbg!(&sectors);
-
-        Self {
-            particles_positions,
-            particles_velocities,
-            sectors,
-        }
+        self.sectors = sectors;
     }
 
-    pub(crate) fn update(&mut self, delta: f32) {
+    pub(crate) fn update(&mut self, delta: f32, size: winit::dpi::PhysicalSize<u32>) {
         for (iter, particle) in self.particles_positions.iter_mut().enumerate() {
             self.particles_velocities[iter].y += GRAVITY_NUMBER * delta;
+            // TODO make it not construct another Vec2 every time that seems like a time sink
             *particle += self.particles_velocities[iter] * Vec2 { x: delta, y: delta };
         }
     }

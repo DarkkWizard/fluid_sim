@@ -250,7 +250,7 @@ impl<'a> BigRenderBoy<'a> {
 
     fn update(&mut self, delta: std::time::Duration) {
         let dt = delta.as_secs_f32();
-        self.fluid_sim.update(dt);
+        self.fluid_sim.update(dt, self.size);
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
