@@ -92,10 +92,11 @@ impl FluidSim {
     }
 
     pub(crate) fn update(&mut self, delta: f32, size: winit::dpi::PhysicalSize<u32>) {
+        let delta_vec = Vec2 { x: delta, y: delta };
         for (iter, particle) in self.particles_positions.iter_mut().enumerate() {
             self.particles_velocities[iter].y += GRAVITY_NUMBER * delta;
-            // TODO make it not construct another Vec2 every time that seems like a time sink
-            *particle += self.particles_velocities[iter] * Vec2 { x: delta, y: delta };
+            *particle += self.particles_velocities[iter] * delta_vec;
+            //if particle.x <
         }
     }
 
