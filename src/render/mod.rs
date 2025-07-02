@@ -332,8 +332,8 @@ pub async fn run() {
                         let now = Instant::now();
                         let delta = now - state.last_frame_time;
                         state.last_frame_time = now;
-
                         state.update(delta);
+
                         match state.render() {
                             Ok(()) => {}
                             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {

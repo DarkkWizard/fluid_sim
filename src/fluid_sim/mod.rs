@@ -6,6 +6,7 @@ pub mod vec2;
 const GRAVITY_NUMBER: f32 = 50.;
 const PARTICLE_NUMBER: usize = 256;
 const MAX_START_SPEED: f32 = 140.0;
+const DECAY_FACTOR: f32 = 0.9;
 
 #[derive(Clone, Debug, Default)]
 pub struct FluidSim {
@@ -96,7 +97,23 @@ impl FluidSim {
         for (iter, particle) in self.particles_positions.iter_mut().enumerate() {
             self.particles_velocities[iter].y += GRAVITY_NUMBER * delta;
             *particle += self.particles_velocities[iter] * delta_vec;
-            //if particle.x <
+            if particle.x < 0. {
+                particle.x = 0.;
+                self.particles_velocities[iter].x *= -1.;
+                self.particles_velocities[iter].x *= DECAY_FACTOR;
+            } else if particle.x > size.width as f32 {
+                particle.x = size.width as f32;
+                self.particles_velocities[iter].x *= -1.;
+                self.particles_velocities[iter].x *= DECAY_FACTOR;
+            } else if particle.y < 0. {
+                particle.y = 0.;
+                self.particles_velocities[iter].y *= -1.;
+                self.particles_velocities[iter].y *= DECAY_FACTOR;
+            } else if particle.y > size.height as f32 {
+                particle.y = size.height as f32;
+                self.particles_velocities[iter].y *= -1.;
+                self.particles_velocities[iter].y *= DECAY_FACTOR;
+            }
         }
     }
 

@@ -44,3 +44,9 @@ impl std::ops::AddAssign for Vec2 {
         *self = *self + rhs
     }
 }
+
+impl std::ops::MulAssign for Vec2 {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs
+    }
+}
