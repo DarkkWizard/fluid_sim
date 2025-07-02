@@ -1,7 +1,7 @@
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Copy, Debug, Clone, Default)]
 pub struct Vertex {
-    pub position: [f32; 3],
+    pub position: [f32; 2],
 }
 
 impl Vertex {
@@ -10,7 +10,7 @@ impl Vertex {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x3,
+                format: wgpu::VertexFormat::Float32x2,
                 offset: 0,
                 shader_location: 0,
             }],

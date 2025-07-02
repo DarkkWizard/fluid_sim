@@ -103,7 +103,7 @@ impl FluidSim {
         self.particles_positions
             .iter()
             .map(|particle| Vertex {
-                position: [particle.x, particle.y, 0.0],
+                position: [particle.x, particle.y],
             })
             .collect()
     }
