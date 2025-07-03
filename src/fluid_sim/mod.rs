@@ -1,5 +1,6 @@
 use crate::{fluid_sim::vec2::Vec2, render::vertex::Vertex};
 use rand::Rng;
+use std::default;
 
 pub mod vec2;
 
@@ -7,12 +8,14 @@ const GRAVITY_NUMBER: f32 = 50.;
 const PARTICLE_NUMBER: usize = 256;
 const MAX_START_SPEED: f32 = 140.0;
 const DECAY_FACTOR: f32 = 0.9;
+const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (9, 2);
+const NUM_OF_SECTORS: u32 = NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1;
 
 #[derive(Clone, Debug, Default)]
 pub struct FluidSim {
     particles_positions: Vec<Vec2>,
     particles_velocities: Vec<Vec2>,
-    sectors: [Vec<usize>; 9],
+    sectors: [Vec<usize>; NUM_OF_SECTORS as usize],
 }
 
 impl FluidSim {
@@ -40,7 +43,7 @@ impl FluidSim {
             })
             .collect();
 
-        let sectors: [Vec<usize>; 9] = Default::default();
+        let sectors: [Vec<usize>; NUM_OF_SECTORS as usize] = Default::default();
 
         let mut endgame = Self {
             particles_positions,
@@ -59,7 +62,7 @@ impl FluidSim {
         let h_two_third: f32 = h_one_third + h_one_third;
         let h_three_third: f32 = size.height as f32;
 
-        let mut sectors: [Vec<usize>; 9] = Default::default();
+        let mut sectors: [Vec<usize>; NUM_OF_SECTORS as usize] = Default::default();
 
         for (i, steve) in self.particles_positions.iter().enumerate() {
             if steve.x < w_one_third {
@@ -92,6 +95,29 @@ impl FluidSim {
         self.sectors = sectors;
     }
 
+    fn update_sectors_using_logic(&mut self, size: &winit::dpi::PhysicalSize<u32>) {
+        let height_width = (
+            (size.height / NUMBER_OF_SECTORS_HEIGHT_WIDTH.0) as f32,
+            (size.width / NUMBER_OF_SECTORS_HEIGHT_WIDTH.1) as f32,
+        );
+
+        let mut sectors: [Vec<usize>; NUM_OF_SECTORS as usize] = Default::default();
+
+        for (i, particle) in self.particles_positions.iter().enumerate() {
+            let col = (particle.x / height_width.1).floor() as u32;
+            let row = (particle.y / height_width.1).floor() as u32;
+
+            let clamped_col = col.min(NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 - 1);
+            let clamped_row = row.min(NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 - 1);
+
+            let index = (clamped_row * NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 + clamped_col) as usize;
+
+            sectors[index].push(i);
+        }
+
+        self.sectors = sectors;
+    }
+
     pub(crate) fn update(&mut self, delta: f32, size: winit::dpi::PhysicalSize<u32>) {
         let delta_vec = Vec2 { x: delta, y: delta };
         for (iter, particle) in self.particles_positions.iter_mut().enumerate() {
@@ -115,6 +141,7 @@ impl FluidSim {
                 self.particles_velocities[iter].y *= DECAY_FACTOR;
             }
         }
+        self.update_sectors(&size);
     }
 
     pub(crate) fn get_particles_vertexes(&self) -> Vec<Vertex> {
