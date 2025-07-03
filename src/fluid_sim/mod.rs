@@ -8,7 +8,7 @@ const GRAVITY_NUMBER: f32 = 50.;
 const PARTICLE_NUMBER: usize = 256;
 const MAX_START_SPEED: f32 = 140.0;
 const DECAY_FACTOR: f32 = 0.9;
-const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (9, 2);
+const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (5, 5);
 const NUM_OF_SECTORS: u32 = NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1;
 
 #[derive(Clone, Debug, Default)]
@@ -50,49 +50,8 @@ impl FluidSim {
             particles_velocities,
             sectors,
         };
-        endgame.update_sectors(&size);
+        endgame.update_sectors_using_logic(&size);
         endgame
-    }
-
-    fn update_sectors(&mut self, size: &winit::dpi::PhysicalSize<u32>) {
-        let w_one_third: f32 = (size.width / 3) as f32;
-        let w_two_third: f32 = w_one_third + w_one_third;
-        let w_three_third: f32 = size.width as f32;
-        let h_one_third: f32 = (size.height / 3) as f32;
-        let h_two_third: f32 = h_one_third + h_one_third;
-        let h_three_third: f32 = size.height as f32;
-
-        let mut sectors: [Vec<usize>; NUM_OF_SECTORS as usize] = Default::default();
-
-        for (i, steve) in self.particles_positions.iter().enumerate() {
-            if steve.x < w_one_third {
-                if steve.y < h_one_third {
-                    sectors[0].push(i);
-                } else if steve.y < h_two_third {
-                    sectors[1].push(i);
-                } else if steve.y < h_three_third {
-                    sectors[2].push(i);
-                }
-            } else if steve.x < w_two_third {
-                if steve.y < h_one_third {
-                    sectors[3].push(i);
-                } else if steve.y < h_two_third {
-                    sectors[4].push(i);
-                } else if steve.y < h_three_third {
-                    sectors[5].push(i);
-                }
-            } else if steve.x < w_three_third {
-                if steve.y < h_one_third {
-                    sectors[6].push(i);
-                } else if steve.y < h_two_third {
-                    sectors[7].push(i);
-                } else if steve.y < h_three_third {
-                    sectors[8].push(i);
-                }
-            }
-        }
-
-        self.sectors = sectors;
     }
 
     fn update_sectors_using_logic(&mut self, size: &winit::dpi::PhysicalSize<u32>) {
@@ -141,7 +100,29 @@ impl FluidSim {
                 self.particles_velocities[iter].y *= DECAY_FACTOR;
             }
         }
-        self.update_sectors(&size);
+        self.update_sectors_using_logic(&size);
+        self.print_sector_grid();
+    }
+
+    fn print_sector_grid(&self) {
+        let (cols, rows) = (
+            NUMBER_OF_SECTORS_HEIGHT_WIDTH.0,
+            NUMBER_OF_SECTORS_HEIGHT_WIDTH.1,
+        );
+
+        let mut total = 0;
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let index = (row * cols + col) as usize;
+                let count = self.sectors[index].len();
+                total += count;
+                print!("[{:3}]", count); // 3-wide formatting for alignment
+            }
+            println!();
+        }
+        println!("{}", total);
+        println!();
     }
 
     pub(crate) fn get_particles_vertexes(&self) -> Vec<Vertex> {
