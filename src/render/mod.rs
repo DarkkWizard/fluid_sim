@@ -26,6 +26,7 @@ struct BigRenderBoy<'a> {
     last_frame_time: Instant,
     screen_size: wgpu::Buffer,
     screen_bind_group: wgpu::BindGroup,
+    count: usize,
 }
 
 impl<'a> BigRenderBoy<'a> {
@@ -203,6 +204,8 @@ impl<'a> BigRenderBoy<'a> {
 
         let last_frame_time = Instant::now();
 
+        let count = 0;
+
         BigRenderBoy {
             surface,
             window,
@@ -217,6 +220,7 @@ impl<'a> BigRenderBoy<'a> {
             last_frame_time,
             screen_size: screen_size_and_particle_size,
             screen_bind_group: screen_particle_bind_group,
+            count,
         }
     }
 
@@ -274,7 +278,13 @@ impl<'a> BigRenderBoy<'a> {
         Ok(())
     }
 
-    fn update(&mut self, delta: std::time::Duration) {
+    fn update(&mut self, delta: &std::time::Duration) {
+        if self.count <= 20 {
+            self.count += 1;
+        } else {
+            self.count = 0;
+        }
+
         let dt = delta.as_secs_f32();
         self.fluid_sim.update(dt, self.size);
     }
@@ -332,7 +342,13 @@ pub async fn run() {
                         let now = Instant::now();
                         let delta = now - state.last_frame_time;
                         state.last_frame_time = now;
-                        state.update(delta);
+                        state.update(&delta);
+
+                        let fps = 1.0 / delta.as_secs_f32();
+                        match state.count {
+                            20 => state.window.set_title(&format!("FPS: {}", fps)),
+                            _ => (),
+                        }
 
                         match state.render() {
                             Ok(()) => {}

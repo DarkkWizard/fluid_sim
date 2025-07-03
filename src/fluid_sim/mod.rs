@@ -1,7 +1,7 @@
 use crate::{fluid_sim::vec2::Vec2, render::vertex::Vertex};
 use rand::Rng;
-use std::default;
 
+mod dom;
 pub mod vec2;
 
 const GRAVITY_NUMBER: f32 = 50.;
@@ -64,7 +64,7 @@ impl FluidSim {
 
         for (i, particle) in self.particles_positions.iter().enumerate() {
             let col = (particle.x / height_width.1).floor() as u32;
-            let row = (particle.y / height_width.1).floor() as u32;
+            let row = (particle.y / height_width.0).floor() as u32;
 
             let clamped_col = col.min(NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 - 1);
             let clamped_row = row.min(NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 - 1);
@@ -78,6 +78,7 @@ impl FluidSim {
     }
 
     pub(crate) fn update(&mut self, delta: f32, size: winit::dpi::PhysicalSize<u32>) {
+        // make them bounce off the walls
         let delta_vec = Vec2 { x: delta, y: delta };
         for (iter, particle) in self.particles_positions.iter_mut().enumerate() {
             self.particles_velocities[iter].y += GRAVITY_NUMBER * delta;
@@ -100,28 +101,41 @@ impl FluidSim {
                 self.particles_velocities[iter].y *= DECAY_FACTOR;
             }
         }
+
+        // deal with sectors and dispersion
         self.update_sectors_using_logic(&size);
-        self.print_sector_grid();
+
+        // want to create a list of tuples that has (particle num, sector) so that we can go
+        // through every particle and use the positions to apply the effects.
+        let mut to_do: Vec<(usize, usize)> = Vec::default();
+        for (i, sector) in self.sectors.iter().enumerate() {
+            for j in sector.iter() {
+                to_do.push((*j, i));
+            }
+        }
+
+        self.particles_positions = self.sort_particles_by_sector();
+
+        // debuging options
+        // self.print_sector_grid();
     }
 
+    // debug
+    #[allow(dead_code)]
     fn print_sector_grid(&self) {
         let (cols, rows) = (
             NUMBER_OF_SECTORS_HEIGHT_WIDTH.0,
             NUMBER_OF_SECTORS_HEIGHT_WIDTH.1,
         );
 
-        let mut total = 0;
-
         for row in 0..rows {
             for col in 0..cols {
                 let index = (row * cols + col) as usize;
                 let count = self.sectors[index].len();
-                total += count;
                 print!("[{:3}]", count); // 3-wide formatting for alignment
             }
             println!();
         }
-        println!("{}", total);
         println!();
     }
 
@@ -132,5 +146,11 @@ impl FluidSim {
                 position: [particle.x, particle.y],
             })
             .collect()
+    }
+
+    /// returns (the position)
+    fn sort_particles_by_sector(&mut self) -> Vec<(Vec2,)> {
+        let v = vec![];
+        for g in self.sectors.iter() {}
     }
 }

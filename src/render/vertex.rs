@@ -5,6 +5,7 @@ pub struct Vertex {
 }
 
 impl Vertex {
+    #[allow(dead_code)]
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
