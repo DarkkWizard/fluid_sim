@@ -47,11 +47,11 @@ impl FluidSim {
             particles_velocities,
             sectors,
         };
-        endgame.update_sectors(size);
+        endgame.update_sectors(&size);
         endgame
     }
 
-    fn update_sectors(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+    fn update_sectors(&mut self, size: &winit::dpi::PhysicalSize<u32>) {
         let w_one_third: f32 = (size.width / 3) as f32;
         let w_two_third: f32 = w_one_third + w_one_third;
         let w_three_third: f32 = size.width as f32;
