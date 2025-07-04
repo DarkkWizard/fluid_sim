@@ -1,9 +1,21 @@
+use cgmath::{Angle, Rad};
 use std::ops::Mul;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32,
+}
+
+impl Vec2 {
+    pub fn rotate_degrees(&mut self, angle: cgmath::Rad<f32>) {
+        let current_angle = Rad(self.y.atan2(self.x));
+        let new_angle = current_angle + angle;
+        let length = ((self.x * self.x) + (self.y * self.y)).sqrt();
+
+        self.x = length * new_angle.0.cos();
+        self.y = length * new_angle.0.sin();
+    }
 }
 
 impl Mul for Vec2 {

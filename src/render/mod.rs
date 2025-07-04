@@ -345,8 +345,10 @@ pub async fn run() {
                         state.update(&delta);
 
                         let fps = 1.0 / delta.as_secs_f32();
+                        let fps_string = format!("FPS: {}", fps);
+                        println!("{fps_string}");
                         match state.count {
-                            20 => state.window.set_title(&format!("FPS: {}", fps)),
+                            20 => state.window.set_title(&fps_string),
                             _ => (),
                         }
 
