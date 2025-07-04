@@ -103,7 +103,12 @@ impl<'a> BigRenderBoy<'a> {
         let particles = fluid_sim.get_particles_vertexes();
         let particle_data = bytemuck::cast_slice(&particles);
 
-        let color = wgpu::Color::BLACK;
+        let color = wgpu::Color {
+            r: 0.768627,
+            g: 0.662745,
+            b: 0.12941176,
+            a: 1.,
+        };
 
         let particle_pos_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Storage Buffer Pos"),
@@ -346,9 +351,11 @@ pub async fn run() {
 
                         let fps = 1.0 / delta.as_secs_f32();
                         let fps_string = format!("FPS: {}", fps);
-                        println!("{fps_string}");
                         match state.count {
-                            20 => state.window.set_title(&fps_string),
+                            20 => {
+                                state.window.set_title(&fps_string);
+                                println!("{fps_string}");
+                            }
                             _ => (),
                         }
 

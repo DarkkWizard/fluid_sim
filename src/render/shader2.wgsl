@@ -62,6 +62,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Return a solid color for the circle
-    return vec4<f32>(1.0, 1.0, 0.0, 1.0); // Bright Yellow
+    return vec4<f32>(0.384313, 0.17254901, 0.65882352, 1.0); // Purple?
 }
 
