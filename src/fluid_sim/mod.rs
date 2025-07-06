@@ -177,7 +177,8 @@ impl FluidSim {
         }
     }
 
-    /// gives back the vector from point 1 to point 2
+    /// gives back the vector from point 1 to point 2. Both poits are indicies into the owned
+    /// position field of the struct
     fn particle_distance(&self, first: usize, second: usize) -> Vec2 {
         let (primary, secondary) = (
             self.particles_positions[first],
@@ -214,5 +215,44 @@ impl FluidSim {
             println!();
         }
         println!();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_size() -> winit::dpi::PhysicalSize<u32> {
+        winit::dpi::PhysicalSize::new(200, 200)
+    }
+
+    fn dummy_sim(positions: Vec<Vec2>, velocities: Vec<Vec2>) -> FluidSim {
+        let particle_count = positions.len();
+        FluidSim {
+            particles_positions: positions.into_boxed_slice(),
+            particles_velocities: velocities.into_boxed_slice(),
+            sectors: vec![0; particle_count].into_boxed_slice(),
+            sector_grid: vec![Vec::new(); NUM_OF_SECTORS as usize],
+        }
+    }
+
+    #[test]
+    fn init_checker() {
+        let sim = FluidSim::new_rand(test_size());
+
+        assert_eq!(sim.particles_velocities.len(), PARTICLE_NUMBER);
+        assert_eq!(sim.sectors.len(), PARTICLE_NUMBER);
+        assert_eq!(sim.particles_positions.len(), PARTICLE_NUMBER);
+        // TODO there's probably more to test here that I'm not thinking about.
+    }
+
+    #[test]
+    fn distance_tester() {
+        let sim = dummy_sim(
+            vec![Vec2 { x: 10., y: 10. }, Vec2 { x: 13., y: 13. }],
+            vec![],
+        );
+
+        let dist_vec = sim.particle_distance(0, 1);
     }
 }
