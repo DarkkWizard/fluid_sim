@@ -6,22 +6,27 @@ mod vec2;
 
 const MIN: f32 = -PI / 16.;
 const MAX: f32 = PI / 16.;
+const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (20, 20);
 const GRAVITY_NUMBER: f32 = 150.;
 const PARTICLE_NUMBER: usize = 1000;
 const MAX_START_SPEED: f32 = 140.0;
 const DECAY_FACTOR: f32 = 0.9;
-const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (20, 20);
 const NUM_OF_SECTORS: u32 = NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1;
+const INTERACTION_RADIUS: f32 = 15.0; // The maximum distance at which particles repel each other, in pixels.
+const INTERACTION_RADIUS_SQUARED: f32 = INTERACTION_RADIUS * INTERACTION_RADIUS;
+const REPULSION_STRENGTH: f32 = 200.0;
 
 #[derive(Clone, Debug)]
 pub struct FluidSim {
     particles_positions: Box<[Vec2]>,
     particles_velocities: Box<[Vec2]>,
     sectors: Box<[usize]>,
+    sector_grid: Vec<Vec<usize>>,
 }
 
 impl FluidSim {
     pub fn new_rand(size: winit::dpi::PhysicalSize<u32>) -> Self {
+        #[allow(deprecated)]
         let mut rng = rand::thread_rng();
         let width = size.width;
         let height = size.height;
@@ -46,11 +51,13 @@ impl FluidSim {
         }
 
         let sectors = vec![0usize; PARTICLE_NUMBER];
+        let sector_grid = vec![Vec::new(); NUM_OF_SECTORS as usize];
 
         let mut sim = Self {
             particles_positions: particles_positions.into_boxed_slice(),
             particles_velocities: particles_velocities.into_boxed_slice(),
             sectors: sectors.into_boxed_slice(),
+            sector_grid,
         };
 
         sim.update_sectors(&size);
@@ -63,6 +70,10 @@ impl FluidSim {
             (size.width / NUMBER_OF_SECTORS_HEIGHT_WIDTH.1) as f32,
         );
 
+        for group in self.sector_grid.iter_mut() {
+            group.clear();
+        }
+
         for (i, particle_pos) in self.particles_positions.iter().enumerate() {
             let col = (particle_pos.x / height_width.1)
                 .clamp(0.0, (NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 - 1) as f32)
@@ -71,7 +82,10 @@ impl FluidSim {
                 .clamp(0.0, (NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 - 1) as f32)
                 as u32;
 
-            self.sectors[i] = (row * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 + col) as usize;
+            let sector_idx = (row * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 + col) as usize;
+            self.sectors[i] = sector_idx;
+            // Populate the grid at the same time
+            self.sector_grid[sector_idx].push(i);
         }
     }
 
@@ -83,21 +97,15 @@ impl FluidSim {
             self.particles_velocities[i].y += GRAVITY_NUMBER * delta;
         }
 
-        self.update_sectors(&size);
-        // TODO: do the sector velocity updating based of distance from other particles
-
-        // for sector in 0..NUM_OF_SECTORS {
-        //     let mut skip_list = vec![];
-        //     for (j, designator) in self.sectors.iter().enumerate() {
-        //         if *designator != sector as usize {
-        //             skip_list.push(sector);
-        //             continue;
-        //         }
-
+        // do the sectors and calculate the other particles velocities away from each particle in
+        // the sector
         //
-        //     }
-        // }
+        // TODO make a circle around each particle and do all of the sectors that fall within that
+        // circle so that we don't miss out along boarders
+        self.update_sectors(&size);
+        self.apply_sector_velocities(&delta);
 
+        // bounce with some randomness
         #[allow(deprecated)]
         let mut rng = rand::thread_rng();
         for i in 0..PARTICLE_NUMBER {
@@ -124,11 +132,14 @@ impl FluidSim {
                 self.particles_velocities[i].y *= -DECAY_FACTOR;
             }
         }
+
+        // apply the changes that we just made
         for i in 0..PARTICLE_NUMBER {
             self.particles_positions[i] += self.particles_velocities[i] * delta_vec;
         }
     }
 
+    // for the render if we want the particles to be outputed as vertexs for the pipeline
     pub(crate) fn get_particles_vertexes(&self) -> Vec<Vertex> {
         self.particles_positions
             .iter()
@@ -136,6 +147,50 @@ impl FluidSim {
                 position: [particle.x, particle.y],
             })
             .collect()
+    }
+
+    fn apply_sector_velocities(&mut self, delta: &f32) {
+        for particle_group in self.sector_grid.iter() {
+            for i in 0..particle_group.len() {
+                for j in (i + 1)..particle_group.len() {
+                    let p1 = particle_group[i];
+                    let p2 = particle_group[j];
+
+                    let dir_vec = self.particle_distance(p1, p2);
+
+                    let pythagoras_unrooted = dir_vec.x.powi(2) + dir_vec.y.powi(2);
+
+                    if pythagoras_unrooted > 0.0 && pythagoras_unrooted < INTERACTION_RADIUS_SQUARED
+                    {
+                        let pythagoras_rooted = pythagoras_unrooted.sqrt();
+
+                        let force =
+                            REPULSION_STRENGTH * (1. - pythagoras_rooted / INTERACTION_RADIUS);
+
+                        let acceleration = (dir_vec / pythagoras_rooted) * force;
+
+                        self.particles_velocities[p1] += acceleration * *delta;
+                        self.particles_velocities[p2] -= acceleration * *delta;
+                    }
+                }
+            }
+        }
+    }
+
+    /// gives back the vector from point 1 to point 2
+    fn particle_distance(&self, first: usize, second: usize) -> Vec2 {
+        let (primary, secondary) = (
+            self.particles_positions[first],
+            self.particles_positions[second],
+        );
+
+        let x_dist = primary.x - secondary.x;
+        let y_dist = primary.y - secondary.y;
+
+        Vec2 {
+            x: x_dist,
+            y: y_dist,
+        }
     }
 
     /// Prints the number of particles in each sector to the console in a grid format.

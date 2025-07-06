@@ -1,7 +1,7 @@
-use cgmath::{Angle, Rad};
+use cgmath::Rad;
 use std::ops::Mul;
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32,
@@ -29,6 +29,17 @@ impl Mul for Vec2 {
     }
 }
 
+impl Mul<f32> for Vec2 {
+    type Output = Vec2;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Vec2 {
+            x: self.x * rhs,
+            y: self.y * rhs,
+        }
+    }
+}
+
 impl std::ops::Add for Vec2 {
     type Output = Vec2;
 
@@ -36,6 +47,17 @@ impl std::ops::Add for Vec2 {
         Vec2 {
             x: self.x + rhs.x,
             y: self.y + rhs.y,
+        }
+    }
+}
+
+impl std::ops::Div<f32> for Vec2 {
+    type Output = Vec2;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Vec2 {
+            x: self.x / rhs,
+            y: self.y / rhs,
         }
     }
 }
@@ -54,6 +76,11 @@ impl std::ops::Sub for Vec2 {
 impl std::ops::AddAssign for Vec2 {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs
+    }
+}
+impl std::ops::SubAssign for Vec2 {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs
     }
 }
 
