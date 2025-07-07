@@ -84,7 +84,6 @@ impl FluidSim {
 
             let sector_idx = (row * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1 + col) as usize;
             self.sectors[i] = sector_idx;
-            // Populate the grid at the same time
             self.sector_grid[sector_idx].push(i);
         }
     }
@@ -179,6 +178,7 @@ impl FluidSim {
 
     /// gives back the vector from point 1 to point 2. Both poits are indicies into the owned
     /// position field of the struct
+    ///
     fn particle_distance(&self, first: usize, second: usize) -> Vec2 {
         let (primary, secondary) = (
             self.particles_positions[first],
@@ -189,14 +189,14 @@ impl FluidSim {
         let y_dist = primary.y - secondary.y;
 
         Vec2 {
-            x: x_dist,
-            y: y_dist,
+            x: -x_dist,
+            y: -y_dist,
         }
     }
 
     /// Prints the number of particles in each sector to the console in a grid format.
     #[allow(dead_code)]
-    fn print_sector_populations(&self) {
+    fn dbg_print_sector_populations(&self) {
         let mut sector_counts = [0; NUM_OF_SECTORS as usize];
 
         // Count particles in each sector
@@ -223,7 +223,7 @@ mod tests {
     use super::*;
 
     fn test_size() -> winit::dpi::PhysicalSize<u32> {
-        winit::dpi::PhysicalSize::new(200, 200)
+        winit::dpi::PhysicalSize::new(400, 400)
     }
 
     fn dummy_sim(positions: Vec<Vec2>, velocities: Vec<Vec2>) -> FluidSim {
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn init_checker() {
+    fn rand_init_works() {
         let sim = FluidSim::new_rand(test_size());
 
         assert_eq!(sim.particles_velocities.len(), PARTICLE_NUMBER);
@@ -247,12 +247,44 @@ mod tests {
     }
 
     #[test]
-    fn distance_tester() {
+    fn distance_function() {
         let sim = dummy_sim(
             vec![Vec2 { x: 10., y: 10. }, Vec2 { x: 13., y: 13. }],
             vec![],
         );
 
         let dist_vec = sim.particle_distance(0, 1);
+        println!("{dist_vec:?}");
+        assert_eq!(dist_vec.x, 3.);
+        assert_eq!(dist_vec.y, 3.);
+    }
+
+    #[test]
+    fn sector_update() {
+        let size = test_size();
+
+        // calculate the size of how large the sectors are going to be.
+        let one_sector_length_x = size.width / NUM_OF_SECTORS;
+        let one_sector_length_y = size.height / NUM_OF_SECTORS;
+
+        // the sim has to have known particles so that we can check that they're in the right spots
+        // later with an assert.
+        let positions = vec![
+            Vec2 { x: 20., y: 20. },
+            Vec2 {
+                x: size.width as f32,
+                y: size.height as f32,
+            },
+            Vec2 {
+                x: (size.width / 2) as f32,
+                y: (size.height / 2) as f32,
+            },
+            Vec2 {
+                x: (size.width / 3) as f32,
+                y: (size.height / 3) as f32,
+            },
+        ];
+        let mut sim = dummy_sim(positions, vec![]);
+        sim.update_sectors(&size);
     }
 }
