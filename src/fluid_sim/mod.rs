@@ -6,15 +6,17 @@ mod vec2;
 
 const MIN: f32 = -PI / 16.;
 const MAX: f32 = PI / 16.;
-const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (20, 20);
+const NUMBER_OF_SECTORS_HEIGHT_WIDTH: (u32, u32) = (1, 1);
 const GRAVITY_NUMBER: f32 = 150.;
 const PARTICLE_NUMBER: usize = 1000;
 const MAX_START_SPEED: f32 = 140.0;
 const DECAY_FACTOR: f32 = 0.9;
 const NUM_OF_SECTORS: u32 = NUMBER_OF_SECTORS_HEIGHT_WIDTH.0 * NUMBER_OF_SECTORS_HEIGHT_WIDTH.1;
-const INTERACTION_RADIUS: f32 = 15.0; // The maximum distance at which particles repel each other, in pixels.
+const INTERACTION_RADIUS: f32 = 100.;
 const INTERACTION_RADIUS_SQUARED: f32 = INTERACTION_RADIUS * INTERACTION_RADIUS;
+/* this is going to have to go */
 const REPULSION_STRENGTH: f32 = 200.0;
+const FALLOFF_CONSTANT: f32 = 20.0;
 
 #[derive(Clone, Debug)]
 pub struct FluidSim {
@@ -176,6 +178,8 @@ impl FluidSim {
         }
     }
 
+    fn apply_vels(&mut self, delta: &f32) {}
+
     /// gives back the vector from point 1 to point 2. Both poits are indicies into the owned
     /// position field of the struct
     ///
@@ -192,6 +196,15 @@ impl FluidSim {
             x: -x_dist,
             y: -y_dist,
         }
+    }
+
+    fn falloff_function(mut input: Vec2) -> Vec2 {
+        let input_squared = input * input;
+        let xinput = FALLOFF_CONSTANT / input_squared.x;
+        let yinput = FALLOFF_CONSTANT / input_squared.y;
+        input.x = xinput;
+        input.y = yinput;
+        input
     }
 
     /// Prints the number of particles in each sector to the console in a grid format.
@@ -266,6 +279,10 @@ mod tests {
         // calculate the size of how large the sectors are going to be.
         let one_sector_length_x = size.width / NUM_OF_SECTORS;
         let one_sector_length_y = size.height / NUM_OF_SECTORS;
+        let one_third_height = size.height / 3;
+        let one_third_width = size.width / 3;
+        let half_height = size.height / 2;
+        let half_width = size.width / 2;
 
         // the sim has to have known particles so that we can check that they're in the right spots
         // later with an assert.
@@ -276,12 +293,12 @@ mod tests {
                 y: size.height as f32,
             },
             Vec2 {
-                x: (size.width / 2) as f32,
-                y: (size.height / 2) as f32,
+                x: half_width as f32,
+                y: half_height as f32,
             },
             Vec2 {
-                x: (size.width / 3) as f32,
-                y: (size.height / 3) as f32,
+                x: one_third_width as f32,
+                y: one_third_height as f32,
             },
         ];
         let mut sim = dummy_sim(positions, vec![]);
