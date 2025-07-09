@@ -11,6 +11,7 @@ const PARTICLE_NUMBER: usize = 10000;
 const MAX_START_SPEED: f32 = 140.0;
 const DECAY_FACTOR: f32 = 0.9;
 const INTERACTION_RADIUS: f32 = 100.;
+const FALLOFF_CONSTANT: f32 = 100.;
 const INTERACTION_RADIUS_SQUARED: f32 = INTERACTION_RADIUS * INTERACTION_RADIUS;
 
 #[derive(Clone, Debug)]
@@ -84,14 +85,13 @@ impl FluidSim {
             }
         }
 
-        // give them new velocities
+        // we want it loop through as few times as possible, so we got this going.
         for i in 0..PARTICLE_NUMBER {
+            // give them new velocities
             self.particles_velocities[i].y += GRAVITY_NUMBER * delta;
-            self.apply_vels(&delta);
-        }
+            self.apply_vel_for_i(i, &delta);
 
-        // apply the changes that we just made
-        for i in 0..PARTICLE_NUMBER {
+            // apply the new velocities
             self.particles_positions[i] += self.particles_velocities[i] * delta_vec;
         }
     }
@@ -106,7 +106,9 @@ impl FluidSim {
             .collect()
     }
 
-    fn apply_vels(&mut self, delta: &f32) {}
+    /// call this in the same loop as the gravity loop, that means that we're already looping over
+    /// every particle so we don't need to loop again inside.
+    fn apply_vel_for_i(&mut self, particle: usize, delta: &f32) {}
 
     /// gives back the vector from point 1 to point 2. Both points are indicies into the owned
     /// position field of the struct
@@ -145,7 +147,6 @@ mod tests {
     }
 
     fn dummy_sim(positions: Vec<Vec2>, velocities: Vec<Vec2>) -> FluidSim {
-        let particle_count = positions.len();
         FluidSim {
             particles_positions: positions.into_boxed_slice(),
             particles_velocities: velocities.into_boxed_slice(),
