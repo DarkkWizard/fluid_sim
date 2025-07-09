@@ -108,7 +108,21 @@ impl FluidSim {
 
     /// call this in the same loop as the gravity loop, that means that we're already looping over
     /// every particle so we don't need to loop again inside.
-    fn apply_vel_for_i(&mut self, particle: usize, delta: &f32) {}
+    ///
+    /// go through and do vector addition for the distance of every
+    /// WE NEED THE CLOSER ONES TO MATTER MORE
+    fn apply_vel_for_i(&mut self, particle: usize, delta: &f32) {
+        for i in 0..PARTICLE_NUMBER {
+            let dist_vec = self.particle_distance(i, particle);
+            let dist_squared = dist_vec.x.exp2() + dist_vec.x.exp2();
+
+            // ignore if it's outside of the interaction radius, we don't sqrt because that's a
+            // large computation and we don't want to deal with it
+            if dist_squared > INTERACTION_RADIUS_SQUARED {
+                continue;
+            }
+        }
+    }
 
     /// gives back the vector from point 1 to point 2. Both points are indicies into the owned
     /// position field of the struct
