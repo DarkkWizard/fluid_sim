@@ -7,6 +7,17 @@ pub struct Vec2 {
     pub y: f32,
 }
 
+impl std::ops::Neg for Vec2 {
+    type Output = Vec2;
+
+    fn neg(self) -> Self::Output {
+        Vec2 {
+            x: -self.x,
+            y: -self.y,
+        }
+    }
+}
+
 impl Vec2 {
     pub fn rotate_degrees(&mut self, angle: cgmath::Rad<f32>) {
         let current_angle = Rad(self.y.atan2(self.x));

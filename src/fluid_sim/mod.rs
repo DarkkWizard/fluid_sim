@@ -1,23 +1,28 @@
 use crate::{fluid_sim::vec2::Vec2, render::vertex::Vertex};
 use rand::Rng;
-use std::f32::consts::PI;
+use rayon::prelude::*;
+use std::{cmp::min, f32::consts::PI};
 
 mod vec2;
 
 const MIN: f32 = -PI / 16.;
 const MAX: f32 = PI / 16.;
-const GRAVITY_NUMBER: f32 = 150.;
-const PARTICLE_NUMBER: usize = 10000;
-const MAX_START_SPEED: f32 = 140.0;
+const GRAVITY_NUMBER: f32 = 300.;
+const PARTICLE_NUMBER: usize = 1000;
+const MAX_START_SPEED: f32 = 140.;
+const MAX_AWAY_SPEED: f32 = 400.;
 const DECAY_FACTOR: f32 = 0.9;
-const INTERACTION_RADIUS: f32 = 100.;
-const FALLOFF_CONSTANT: f32 = 100.;
+const FALLOFF_CONSTANT: f32 = 1000.;
+const INTERACTION_RADIUS: f32 = 200.;
 const INTERACTION_RADIUS_SQUARED: f32 = INTERACTION_RADIUS * INTERACTION_RADIUS;
 
 #[derive(Clone, Debug)]
 pub struct FluidSim {
-    particles_positions: Box<[Vec2]>,
-    particles_velocities: Box<[Vec2]>,
+    current_positions: Box<[Vec2]>,
+    current_velocities: Box<[Vec2]>,
+
+    next_positions: Box<[Vec2]>,
+    next_velocities: Box<[Vec2]>,
 }
 
 impl FluidSim {
@@ -47,109 +52,121 @@ impl FluidSim {
         }
 
         Self {
-            particles_positions: particles_positions.into_boxed_slice(),
-            particles_velocities: particles_velocities.into_boxed_slice(),
+            current_positions: particles_positions.clone().into_boxed_slice(),
+            current_velocities: particles_velocities.clone().into_boxed_slice(),
+            next_positions: particles_positions.into_boxed_slice(),
+            next_velocities: particles_velocities.into_boxed_slice(),
         }
     }
 
     pub(crate) fn update(&mut self, delta: f32, size: winit::dpi::PhysicalSize<u32>) {
         let delta_vec = Vec2 { x: delta, y: delta };
-        // TODO make a circle around each particle and do all of the sectors that fall within that
-        // circle so that we don't miss out along boarders
+
+        self.next_velocities
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, new_velocity)| {
+                *new_velocity = self.current_velocities[i];
+
+                // gravity
+                new_velocity.y += GRAVITY_NUMBER * delta;
+
+                let pos = self.current_positions[i];
+                // pressure from the other particles around it
+                for j in 0..PARTICLE_NUMBER {
+                    if i == j {
+                        continue;
+                    }
+
+                    let dist_vec = particle_distance(self.current_positions[j], pos);
+                    let dist_squared = dist_vec.x.powi(2) + dist_vec.y.powi(2);
+
+                    if dist_squared < INTERACTION_RADIUS_SQUARED && dist_squared > 1e-6 {
+                        let magnatude = (FALLOFF_CONSTANT / dist_squared).min(MAX_AWAY_SPEED);
+                        let force_direction = dist_vec / dist_squared.sqrt();
+                        *new_velocity += force_direction * magnatude * delta;
+                    }
+                }
+            });
+
+        // update the positions with some fancy zipping
+        self.next_positions
+            .par_iter_mut()
+            .zip(&*self.current_positions)
+            .zip(&*self.next_velocities)
+            .for_each(|((next_pos, current_pos), next_vel)| {
+                *next_pos = *current_pos + *next_vel * delta_vec
+            });
 
         // bounce with some randomness
-        #[allow(deprecated)]
-        let mut rng = rand::thread_rng();
-        for i in 0..PARTICLE_NUMBER {
-            if self.particles_positions[i].x < 0.0 {
-                self.particles_positions[i].x = 0.0;
+        self.next_positions
+            .par_iter_mut()
+            .zip(self.next_velocities.par_iter_mut())
+            .for_each(|(pos, vel)| {
                 #[allow(deprecated)]
-                self.particles_velocities[i].rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
-                self.particles_velocities[i].x *= -DECAY_FACTOR;
-            } else if self.particles_positions[i].x > size.width as f32 {
-                self.particles_positions[i].x = size.width as f32;
-                #[allow(deprecated)]
-                self.particles_velocities[i].rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
-                self.particles_velocities[i].x *= -DECAY_FACTOR;
-            }
-            if self.particles_positions[i].y < 0.0 {
-                self.particles_positions[i].y = 0.0;
-                #[allow(deprecated)]
-                self.particles_velocities[i].rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
-                self.particles_velocities[i].y *= -DECAY_FACTOR;
-            } else if self.particles_positions[i].y > size.height as f32 {
-                self.particles_positions[i].y = size.height as f32;
-                #[allow(deprecated)]
-                self.particles_velocities[i].rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
-                self.particles_velocities[i].y *= -DECAY_FACTOR;
-            }
-        }
+                let mut rng = rand::thread_rng();
+                if pos.x < 0.0 {
+                    pos.x = 0.0;
+                    #[allow(deprecated)]
+                    vel.rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
+                    vel.x *= -DECAY_FACTOR;
+                } else if pos.x > size.width as f32 {
+                    pos.x = size.width as f32;
+                    #[allow(deprecated)]
+                    vel.rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
+                    vel.x *= -DECAY_FACTOR;
+                }
+                if pos.y < 0.0 {
+                    pos.y = 0.0;
+                    #[allow(deprecated)]
+                    vel.rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
+                    vel.y *= -DECAY_FACTOR;
+                } else if pos.y > size.height as f32 {
+                    pos.y = size.height as f32;
+                    #[allow(deprecated)]
+                    vel.rotate_degrees(cgmath::Rad(rng.gen_range(MIN..MAX)));
+                    vel.y *= -DECAY_FACTOR;
+                }
+            });
 
-        // we want it loop through as few times as possible, so we got this going.
-        for i in 0..PARTICLE_NUMBER {
-            // give them new velocities
-            self.particles_velocities[i].y += GRAVITY_NUMBER * delta;
-            self.apply_vel_for_i(i, &delta);
-
-            // apply the new velocities
-            self.particles_positions[i] += self.particles_velocities[i] * delta_vec;
-        }
+        // SWAP THEM!!!
+        std::mem::swap(&mut self.current_positions, &mut self.next_positions);
+        std::mem::swap(&mut self.current_velocities, &mut self.next_velocities);
     }
 
     // for the render if we want the particles to be outputed as vertexs for the pipeline
     pub(crate) fn get_particles_vertexes(&self) -> Vec<Vertex> {
-        self.particles_positions
+        self.current_positions
             .iter()
             .map(|particle| Vertex {
                 position: [particle.x, particle.y],
             })
             .collect()
     }
+}
 
-    /// call this in the same loop as the gravity loop, that means that we're already looping over
-    /// every particle so we don't need to loop again inside.
-    ///
-    /// go through and do vector addition for the distance of every
-    /// WE NEED THE CLOSER ONES TO MATTER MORE
-    fn apply_vel_for_i(&mut self, particle: usize, delta: &f32) {
-        for i in 0..PARTICLE_NUMBER {
-            let dist_vec = self.particle_distance(i, particle);
-            let dist_squared = dist_vec.x.exp2() + dist_vec.x.exp2();
+/// gives back the vector from point 1 to point 2. Both points are indicies into the owned
+/// position field of the struct
+///
+fn particle_distance(first: Vec2, second: Vec2) -> Vec2 {
+    let x_dist = first.x - second.x;
+    let y_dist = first.y - second.y;
 
-            // ignore if it's outside of the interaction radius, we don't sqrt because that's a
-            // large computation and we don't want to deal with it
-            if dist_squared > INTERACTION_RADIUS_SQUARED {
-                continue;
-            }
-        }
+    Vec2 {
+        x: -x_dist,
+        y: -y_dist,
     }
+}
 
-    /// gives back the vector from point 1 to point 2. Both points are indicies into the owned
-    /// position field of the struct
-    ///
-    fn particle_distance(&self, first: usize, second: usize) -> Vec2 {
-        let (primary, secondary) = (
-            self.particles_positions[first],
-            self.particles_positions[second],
-        );
-
-        let x_dist = primary.x - secondary.x;
-        let y_dist = primary.y - secondary.y;
-
-        Vec2 {
-            x: -x_dist,
-            y: -y_dist,
-        }
-    }
-
-    fn falloff_function(mut input: Vec2) -> Vec2 {
-        let input_squared = input * input;
-        let xinput = FALLOFF_CONSTANT / input_squared.x;
-        let yinput = FALLOFF_CONSTANT / input_squared.y;
-        input.x = xinput;
-        input.y = yinput;
-        input
-    }
+/// treats the Vec2 as a distance rather than a point. Might be a little confusing
+#[allow(dead_code)]
+fn falloff_function(mut input: Vec2) -> Vec2 {
+    let input_squared = input * input;
+    let xinput = FALLOFF_CONSTANT / input_squared.x;
+    let yinput = FALLOFF_CONSTANT / input_squared.y;
+    input.x = xinput;
+    input.y = yinput;
+    input
 }
 
 #[cfg(test)]
@@ -162,8 +179,10 @@ mod tests {
 
     fn dummy_sim(positions: Vec<Vec2>, velocities: Vec<Vec2>) -> FluidSim {
         FluidSim {
-            particles_positions: positions.into_boxed_slice(),
-            particles_velocities: velocities.into_boxed_slice(),
+            current_positions: positions.clone().into_boxed_slice(),
+            current_velocities: velocities.clone().into_boxed_slice(),
+            next_positions: positions.into_boxed_slice(),
+            next_velocities: velocities.into_boxed_slice(),
         }
     }
 
@@ -171,21 +190,22 @@ mod tests {
     fn rand_init_works() {
         let sim = FluidSim::new_rand(test_size());
 
-        assert_eq!(sim.particles_velocities.len(), PARTICLE_NUMBER);
-        assert_eq!(sim.particles_positions.len(), PARTICLE_NUMBER);
+        assert_eq!(sim.current_velocities.len(), PARTICLE_NUMBER);
+        assert_eq!(sim.current_positions.len(), PARTICLE_NUMBER);
         // TODO there's probably more to test here that I'm not thinking about.
     }
 
     #[test]
-    fn distance_function() {
-        let sim = dummy_sim(
-            vec![Vec2 { x: 10., y: 10. }, Vec2 { x: 13., y: 13. }],
-            vec![],
+    fn falloff_actually_works() {
+        assert!(
+            falloff_function(Vec2 { x: 10., y: 10. }) < falloff_function(Vec2 { x: 1., y: 1. })
         );
-
-        let dist_vec = sim.particle_distance(0, 1);
-        println!("{dist_vec:?}");
-        assert_eq!(dist_vec.x, 3.);
-        assert_eq!(dist_vec.y, 3.);
+        assert!(falloff_function(Vec2 { x: 1., y: 1. }) == falloff_function(Vec2 { x: 1., y: 1. }));
+        assert!(
+            falloff_function(Vec2 { x: -1., y: -1. }) == falloff_function(Vec2 { x: 1., y: 1. })
+        );
+        assert!(
+            falloff_function(Vec2 { x: -10., y: -10. }) < falloff_function(Vec2 { x: 1., y: 1. })
+        );
     }
 }
