@@ -1,6 +1,7 @@
 pub mod vertex;
 
 use crate::fluid_sim::FluidSim;
+use rayon::prelude::*;
 use std::time::Instant;
 use wgpu::{util::DeviceExt, Backends, DeviceDescriptor, RequestAdapterOptions, TextureUsages};
 use winit::{
@@ -235,15 +236,14 @@ impl<'a> BigRenderBoy<'a> {
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let particles = self.fluid_sim.get_particles_vertexes();
-        if particles.is_empty() {
-            return Ok(());
-        }
-
         self.queue.write_buffer(
             &self.particle_pos_buffer,
             0,
             bytemuck::cast_slice(&particles),
         );
+        // I think this is here so that it can start writing into the buffer as soon as possible.
+        // The last function doesn't start writing until it gets called to submit?
+        self.queue.submit([]);
 
         let output = self.surface.get_current_texture()?;
         let view = output
