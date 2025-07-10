@@ -1,7 +1,7 @@
 use crate::{fluid_sim::vec2::Vec2, render::vertex::Vertex};
 use rand::Rng;
 use rayon::prelude::*;
-use std::{cmp::min, f32::consts::PI};
+use std::f32::consts::PI;
 
 mod vec2;
 
